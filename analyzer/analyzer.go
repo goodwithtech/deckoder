@@ -3,6 +3,7 @@ package analyzer
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/goodwithtech/deckoder/extractor"
@@ -30,6 +31,15 @@ func Analyze(ctx context.Context, imageName string, filterFunc types.FilterFunc,
 		return fileMap, nil
 	}
 
+	fileMap, err = e.ExtractFromFile(ctx, r, filterFunc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract files from saved tar: %w", err)
+	}
+	return fileMap, nil
+}
+
+func AnalyzeFromFile(ctx context.Context, r io.ReadCloser, filterFunc types.FilterFunc) (fileMap extractor.FileMap, err error) {
+	e := docker.NewDockerExtractor(types.DockerOption{})
 	fileMap, err = e.ExtractFromFile(ctx, r, filterFunc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract files from saved tar: %w", err)
