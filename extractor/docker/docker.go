@@ -345,6 +345,12 @@ func (d DockerExtractor) ExtractFiles(layer io.Reader, filterFunc types.FilterFu
 		if _, ok := tracingFilepath[filePath]; ok {
 			extract = true
 		}
+
+		// for aufs
+		if strings.HasPrefix(fileName, wh) {
+			extract = true
+		}
+
 		if !extract {
 			// Determine if we should extract the element
 			extract, err = filterFunc(hdr)

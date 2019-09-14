@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/goodwithtech/deckoder/types"
 )
@@ -34,9 +33,6 @@ func CreateFilterPathFunc(filenames []string) types.FilterFunc {
 	return func(h *tar.Header) (bool, error) {
 		filePath := filepath.Clean(h.Name)
 		fileName := filepath.Base(filePath)
-		if strings.HasPrefix(fileName, ".wh.") {
-			return true, nil
-		}
 		return StringInSlice(filePath, filenames) || StringInSlice(fileName, filenames), nil
 	}
 }
