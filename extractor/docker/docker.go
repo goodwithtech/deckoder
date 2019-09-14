@@ -33,6 +33,9 @@ const (
 	wh  string = ".wh."
 )
 
+// trace another layers if once checked file
+var tracingFilepath = map[string]struct{}{}
+
 type manifest struct {
 	Config   string   `json:"Config"`
 	RepoTags []string `json:"RepoTags"`
@@ -315,7 +318,6 @@ func (d DockerExtractor) ExtractFromFile(ctx context.Context, r io.Reader, filte
 func (d DockerExtractor) ExtractFiles(layer io.Reader, filterFunc types.FilterFunc) (extractor.FileMap, opqDirs, error) {
 	data := make(map[string]extractor.FileData)
 	opqDirs := opqDirs{}
-
 	tr := tar.NewReader(layer)
 	for {
 		hdr, err := tr.Next()
@@ -338,14 +340,21 @@ func (d DockerExtractor) ExtractFiles(layer io.Reader, filterFunc types.FilterFu
 			continue
 		}
 
-		// Determine if we should extract the element
-		extract, err := filterFunc(hdr)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to filtering file: %w", err)
+		var extract bool
+		// first check tracing file
+		if _, ok := tracingFilepath[filePath]; ok {
+			extract = true
 		}
-
 		if !extract {
-			continue
+			// Determine if we should extract the element
+			extract, err = filterFunc(hdr)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to filtering file: %w", err)
+			}
+			if !extract {
+				continue
+			}
+			tracingFilepath[filePath] = struct{}{}
 		}
 
 		if hdr.Typeflag == tar.TypeSymlink || hdr.Typeflag == tar.TypeLink || hdr.Typeflag == tar.TypeReg {
