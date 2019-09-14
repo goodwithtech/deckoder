@@ -1,12 +1,16 @@
 package docker
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"reflect"
 	"testing"
 
-	"github.com/knqyf263/fanal/extractor"
+	"github.com/goodwithtech/deckoder/types"
+	"github.com/goodwithtech/deckoder/utils"
+
+	"github.com/goodwithtech/deckoder/extractor"
 )
 
 const (
@@ -16,15 +20,14 @@ const (
 
 func TestExtractFromFile(t *testing.T) {
 	vectors := []struct {
-		file        string   // Test input file
-		filenames   []string // Target files
-		permissions []os.FileMode
-		FileMap     extractor.FileMap // Expected output
-		err         error             // Expected error to occur
+		file       string // Test input file
+		filterFunc types.FilterFunc
+		FileMap    extractor.FileMap // Expected output
+		err        error             // Expected error to occur
 	}{
 		{
-			file:      "testdata/image1.tar",
-			filenames: []string{"var/foo", "etc/test/bar"},
+			file:       "testdata/image1.tar",
+			filterFunc: utils.CreateFilterPathFunc([]string{"var/foo", "etc/test/bar"}),
 			FileMap: extractor.FileMap{
 				"etc/test/bar": {Body: []byte("bar\n"), FileMode: NormalFileMode},
 				"/config": {
@@ -35,8 +38,8 @@ func TestExtractFromFile(t *testing.T) {
 			err: nil,
 		},
 		{
-			file:      "testdata/image2.tar",
-			filenames: []string{"home/app/Gemfile", "home/app2/Gemfile"},
+			file:       "testdata/image2.tar",
+			filterFunc: utils.CreateFilterPathFunc([]string{"home/app/Gemfile", "home/app2/Gemfile"}),
 			FileMap: extractor.FileMap{
 				"home/app2/Gemfile": {Body: []byte("gem"), FileMode: NormalFileMode},
 				"/config": {
@@ -47,8 +50,8 @@ func TestExtractFromFile(t *testing.T) {
 			err: nil,
 		},
 		{
-			file:      "testdata/image3.tar",
-			filenames: []string{"home/app/Gemfile", "home/app2/Pipfile", "home/app/Pipfile"},
+			file:       "testdata/image3.tar",
+			filterFunc: utils.CreateFilterPathFunc([]string{"home/app/Gemfile", "home/app2/Pipfile", "home/app/Pipfile"}),
 			FileMap: extractor.FileMap{
 				"home/app/Pipfile": {Body: []byte("pip"), FileMode: NormalFileMode},
 				"/config": {
@@ -59,8 +62,8 @@ func TestExtractFromFile(t *testing.T) {
 			err: nil,
 		},
 		{
-			file:      "testdata/image4.tar",
-			filenames: []string{".abc", ".def", "foo/.abc", "foo/.def", ".foo/.abc"},
+			file:       "testdata/image4.tar",
+			filterFunc: utils.CreateFilterPathFunc([]string{".abc", ".def", "foo/.abc", "foo/.def", ".foo/.abc"}),
 			FileMap: extractor.FileMap{
 				".def":     {Body: []byte("def"), FileMode: NormalFileMode},
 				"foo/.abc": {Body: []byte("abc"), FileMode: NormalFileMode},
@@ -82,12 +85,15 @@ func TestExtractFromFile(t *testing.T) {
 			defer f.Close()
 
 			d := DockerExtractor{}
-			fm, err := d.ExtractFromFile(nil, f, v.filenames, v.permissions)
+			fm, err := d.ExtractFromFile(nil, f, v.filterFunc)
 			if v.err != err {
 				t.Errorf("err: got %v, want %v", v.err, err)
 			}
 			if !reflect.DeepEqual(fm, v.FileMap) {
 				t.Errorf("FilesMap: got %v, want %v", fm, v.FileMap)
+				for _, f := range fm {
+					fmt.Println(string(f.Body))
+				}
 			}
 		})
 	}
@@ -95,7 +101,8 @@ func TestExtractFromFile(t *testing.T) {
 
 func TestExtractFiles(t *testing.T) {
 	vectors := []struct {
-		file        string   // Test input file
+		file        string // Test input file
+		filterFunc  types.FilterFunc
 		filenames   []string // Target files
 		permissions []os.FileMode
 		FileMap     extractor.FileMap // Expected output
@@ -103,15 +110,15 @@ func TestExtractFiles(t *testing.T) {
 		err         error             // Expected error to occur
 	}{
 		{
-			file:      "testdata/normal.tar",
-			filenames: []string{"var/foo"},
-			FileMap:   extractor.FileMap{"var/foo": {Body: []byte{}, FileMode: NormalFileMode}},
-			opqDirs:   []string{},
-			err:       nil,
+			file:       "testdata/normal.tar",
+			filterFunc: utils.CreateFilterPathFunc([]string{"var/foo"}),
+			FileMap:    extractor.FileMap{"var/foo": {Body: []byte{}, FileMode: NormalFileMode}},
+			opqDirs:    []string{},
+			err:        nil,
 		},
 		{
-			file:      "testdata/opq.tar",
-			filenames: []string{"var/foo"},
+			file:       "testdata/opq.tar",
+			filterFunc: utils.CreateFilterPathFunc([]string{"var/foo"}),
 			FileMap: extractor.FileMap{
 				"var/.wh.foo": {Body: []byte{}, FileMode: SuFileMode},
 			},
@@ -119,8 +126,8 @@ func TestExtractFiles(t *testing.T) {
 			err:     nil,
 		},
 		{
-			file:      "testdata/opq2.tar",
-			filenames: []string{"var/foo", "etc/test/bar"},
+			file:       "testdata/opq2.tar",
+			filterFunc: utils.CreateFilterPathFunc([]string{"var/foo", "etc/test/bar"}),
 			FileMap: extractor.FileMap{
 				"etc/test/bar": {Body: []byte("bar\n"), FileMode: NormalFileMode},
 				"var/.wh.foo":  {Body: []byte{}, FileMode: SuFileMode},
@@ -139,7 +146,7 @@ func TestExtractFiles(t *testing.T) {
 			defer f.Close()
 
 			d := DockerExtractor{}
-			fm, opqDirs, err := d.ExtractFiles(f, v.filenames, v.permissions)
+			fm, opqDirs, err := d.ExtractFiles(f, v.filterFunc)
 			if v.err != err {
 				t.Errorf("err: got %v, want %v", v.err, err)
 			}

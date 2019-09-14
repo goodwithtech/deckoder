@@ -2,10 +2,9 @@ package extractor
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
-
-	"github.com/pkg/errors"
 )
 
 var (
