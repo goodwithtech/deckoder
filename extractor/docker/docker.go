@@ -5,6 +5,8 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -13,19 +15,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opencontainers/go-digest"
-
-	"github.com/knqyf263/fanal/extractor"
-	"github.com/knqyf263/fanal/extractor/docker/token/ecr"
-	"github.com/knqyf263/fanal/extractor/docker/token/gcr"
-	"github.com/knqyf263/fanal/types"
+	"github.com/goodwithtech/deckoder/extractor"
+	"github.com/goodwithtech/deckoder/extractor/docker/token/ecr"
+	"github.com/goodwithtech/deckoder/extractor/docker/token/gcr"
+	"github.com/goodwithtech/deckoder/types"
+	digest "github.com/opencontainers/go-digest"
 
 	"github.com/docker/distribution/manifest/schema2"
 	"github.com/docker/docker/client"
 	"github.com/genuinetools/reg/registry"
-	"github.com/knqyf263/fanal/cache"
+	"github.com/goodwithtech/deckoder/cache"
 	"github.com/knqyf263/nested"
-	"golang.org/x/xerrors"
 )
 
 const (
@@ -104,7 +104,7 @@ func applyLayers(layerIDs []string, filesInLayers map[string]extractor.FileMap, 
 		return nil
 	}
 	if err := nestedMap.Walk(walkFn); err != nil {
-		return nil, xerrors.Errorf("failed to walk nested map: %w", err)
+		return nil, fmt.Errorf("failed to walk nested map: %w", err)
 	}
 
 	return fileMap, nil
@@ -114,12 +114,12 @@ func applyLayers(layerIDs []string, filesInLayers map[string]extractor.FileMap, 
 func (d DockerExtractor) createRegistryClient(ctx context.Context, domain string) (*registry.Registry, error) {
 	auth, err := GetToken(ctx, domain, d.Option)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to get auth config: %w", err)
+		return nil, fmt.Errorf("failed to get auth config: %w", err)
 	}
 
 	// Prevent non-ssl unless explicitly forced
 	if !d.Option.NonSSL && strings.HasPrefix(auth.ServerAddress, "http:") {
-		return nil, xerrors.New("attempted to use insecure protocol! Use force-non-ssl option to force")
+		return nil, errors.New("attempted to use insecure protocol! Use force-non-ssl option to force")
 	}
 
 	// Create the registry client.
@@ -154,17 +154,17 @@ func (d DockerExtractor) SaveLocalImage(ctx context.Context, imageName string) (
 func (d DockerExtractor) saveLocalImage(ctx context.Context, imageName string) (io.ReadCloser, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
-		return nil, xerrors.New("error in docker NewClient")
+		return nil, errors.New("error in docker NewClient")
 	}
 
 	r, err := cli.ImageSave(ctx, []string{imageName})
 	if err != nil {
-		return nil, xerrors.New("error in docker image save")
+		return nil, errors.New("error in docker image save")
 	}
 	return r, nil
 }
 
-func (d DockerExtractor) Extract(ctx context.Context, imageName string, filenames []string, permissions []os.FileMode) (extractor.FileMap, error) {
+func (d DockerExtractor) Extract(ctx context.Context, imageName string, filterFunc types.FilterFunc) (extractor.FileMap, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), d.Option.Timeout)
 	defer cancel()
 
@@ -184,7 +184,7 @@ func (d DockerExtractor) Extract(ctx context.Context, imageName string, filename
 	}
 	m, ok := manifest.(*schema2.DeserializedManifest)
 	if !ok {
-		return nil, xerrors.New("invalid manifest")
+		return nil, errors.New("invalid manifest")
 	}
 
 	ch := make(chan layer)
@@ -199,7 +199,7 @@ func (d DockerExtractor) Extract(ctx context.Context, imageName string, filename
 				// Download the layer.
 				rc, err = r.DownloadLayer(ctx, image.Path, d)
 				if err != nil {
-					errCh <- xerrors.Errorf("failed to download the layer(%s): %w", d, err)
+					errCh <- fmt.Errorf("failed to download the layer(%s): %w", d, err)
 					return
 				}
 				rc, err = cache.Set(string(d), rc)
@@ -209,7 +209,7 @@ func (d DockerExtractor) Extract(ctx context.Context, imageName string, filename
 			}
 			gzipReader, err := gzip.NewReader(rc)
 			if err != nil {
-				errCh <- xerrors.Errorf("invalid gzip: %w", err)
+				errCh <- fmt.Errorf("invalid gzip: %w", err)
 				return
 			}
 			ch <- layer{ID: d, Content: gzipReader}
@@ -225,19 +225,12 @@ func (d DockerExtractor) Extract(ctx context.Context, imageName string, filename
 		case err := <-errCh:
 			return nil, err
 		case <-ctx.Done():
-			return nil, xerrors.Errorf("timeout: %w", ctx.Err())
+			return nil, fmt.Errorf("timeout: %w", ctx.Err())
 		}
-		files, opqDirs, err := d.ExtractFiles(l.Content, filenames, permissions)
+		files, opqDirs, err := d.ExtractFiles(l.Content, filterFunc)
 		if err != nil {
 			return nil, err
 		}
-
-		// add checked file once
-		checkedFilenames := []string{}
-		for filename, _ := range files {
-			checkedFilenames = append(checkedFilenames, filename)
-		}
-		filenames = append(filenames, checkedFilenames...)
 		layerID := string(l.ID)
 		filesInLayers[layerID] = files
 		opqInLayers[layerID] = opqDirs
@@ -245,17 +238,17 @@ func (d DockerExtractor) Extract(ctx context.Context, imageName string, filename
 
 	fileMap, err := applyLayers(layerIDs, filesInLayers, opqInLayers)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to apply layers: %w", err)
+		return nil, fmt.Errorf("failed to apply layers: %w", err)
 	}
 
 	// download config file
 	rc, err := r.DownloadLayer(ctx, image.Path, m.Manifest.Config.Digest)
 	if err != nil {
-		return nil, xerrors.Errorf("error in layer download: %w", err)
+		return nil, fmt.Errorf("error in layer download: %w", err)
 	}
 	config, err := ioutil.ReadAll(rc)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to decode config JSON: %w", err)
+		return nil, fmt.Errorf("failed to decode config JSON: %w", err)
 	}
 
 	// special file for command analyzer
@@ -264,7 +257,7 @@ func (d DockerExtractor) Extract(ctx context.Context, imageName string, filename
 	return fileMap, nil
 }
 
-func (d DockerExtractor) ExtractFromFile(ctx context.Context, r io.Reader, filenames []string, permissions []os.FileMode) (extractor.FileMap, error) {
+func (d DockerExtractor) ExtractFromFile(ctx context.Context, r io.Reader, filterFunc types.FilterFunc) (extractor.FileMap, error) {
 	manifests := make([]manifest, 0)
 	filesInLayers := map[string]extractor.FileMap{}
 	tmpJSONs := extractor.FileMap{}
@@ -294,17 +287,10 @@ func (d DockerExtractor) ExtractFromFile(ctx context.Context, r io.Reader, filen
 
 		case strings.HasSuffix(header.Name, ".tar"):
 			layerID := filepath.Base(filepath.Dir(header.Name))
-			files, opqDirs, err := d.ExtractFiles(tr, filenames, permissions)
+			files, opqDirs, err := d.ExtractFiles(tr, filterFunc)
 			if err != nil {
 				return nil, err
 			}
-
-			// add checked file once
-			checkedFilenames := []string{}
-			for filename, _ := range files {
-				checkedFilenames = append(checkedFilenames, filename)
-			}
-			filenames = append(filenames, checkedFilenames...)
 			filesInLayers[layerID] = files
 			opqInLayers[layerID] = opqDirs
 		default:
@@ -312,7 +298,7 @@ func (d DockerExtractor) ExtractFromFile(ctx context.Context, r io.Reader, filen
 	}
 
 	if len(manifests) == 0 {
-		return nil, xerrors.New("Invalid image")
+		return nil, errors.New("Invalid image")
 	}
 
 	fileMap, err := applyLayers(manifests[0].Layers, filesInLayers, opqInLayers)
@@ -326,7 +312,7 @@ func (d DockerExtractor) ExtractFromFile(ctx context.Context, r io.Reader, filen
 	return fileMap, nil
 }
 
-func (d DockerExtractor) ExtractFiles(layer io.Reader, filenames []string, permissions []os.FileMode) (extractor.FileMap, opqDirs, error) {
+func (d DockerExtractor) ExtractFiles(layer io.Reader, filterFunc types.FilterFunc) (extractor.FileMap, opqDirs, error) {
 	data := make(map[string]extractor.FileData)
 	opqDirs := opqDirs{}
 
@@ -353,21 +339,9 @@ func (d DockerExtractor) ExtractFiles(layer io.Reader, filenames []string, permi
 		}
 
 		// Determine if we should extract the element
-		extract := false
-		for _, s := range filenames {
-			if s == filePath || s == fileName || strings.HasPrefix(fileName, wh) {
-				extract = true
-				break
-			}
-		}
-
-		if extract == false {
-			for _, p := range permissions {
-				if fileMode&p != 0 {
-					extract = true
-					break
-				}
-			}
+		extract, err := filterFunc(hdr)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to filtering file: %w", err)
 		}
 
 		if !extract {
@@ -377,7 +351,7 @@ func (d DockerExtractor) ExtractFiles(layer io.Reader, filenames []string, permi
 		if hdr.Typeflag == tar.TypeSymlink || hdr.Typeflag == tar.TypeLink || hdr.Typeflag == tar.TypeReg {
 			d, err := ioutil.ReadAll(tr)
 			if err != nil {
-				return nil, nil, xerrors.Errorf("failed to read file: %w", err)
+				return nil, nil, fmt.Errorf("failed to read file: %w", err)
 			}
 			data[filePath] = extractor.FileData{
 				Body:     d,

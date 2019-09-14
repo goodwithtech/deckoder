@@ -1,14 +1,13 @@
 package gcr
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/docker-credential-gcr/store"
 
-	"golang.org/x/xerrors"
-
-	"github.com/knqyf263/fanal/types"
+	"github.com/goodwithtech/deckoder/types"
 )
 
 func TestCheckOptions(t *testing.T) {
@@ -43,7 +42,7 @@ func TestCheckOptions(t *testing.T) {
 				t.Errorf("%s : expected error but no error", testname)
 				continue
 			}
-			if !xerrors.Is(err, v.wantErr) {
+			if !errors.Is(err, v.wantErr) {
 				t.Errorf("[%s]\nexpected error based on %v\nactual : %v", testname, v.wantErr, err)
 			}
 			continue

@@ -2,11 +2,10 @@ package gcr
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
-	"github.com/knqyf263/fanal/types"
-
-	"golang.org/x/xerrors"
+	"github.com/goodwithtech/deckoder/types"
 
 	"github.com/GoogleCloudPlatform/docker-credential-gcr/config"
 	"github.com/GoogleCloudPlatform/docker-credential-gcr/credhelper"
@@ -22,7 +21,7 @@ const gcrURL = "gcr.io"
 
 func (g *GCR) CheckOptions(domain string, d types.DockerOption) error {
 	if !strings.HasSuffix(domain, gcrURL) {
-		return xerrors.Errorf("GCR : %w", types.InvalidURLPattern)
+		return fmt.Errorf("GCR : %w", types.InvalidURLPattern)
 	}
 	g.domain = domain
 	if d.GcpCredPath != "" {

@@ -1,14 +1,14 @@
 package cache
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/knqyf263/fanal/utils"
-
-	"golang.org/x/xerrors"
+	"github.com/goodwithtech/deckoder/utils"
 )
 
 var (
@@ -28,11 +28,11 @@ func Get(key string) io.Reader {
 func Set(key string, file io.Reader) (io.Reader, error) {
 	filePath := filepath.Join(cacheDir, replacer.Replace(key))
 	if err := os.MkdirAll(cacheDir, os.ModePerm); err != nil {
-		return nil, xerrors.Errorf("failed to mkdir all: %w", err)
+		return nil, fmt.Errorf("failed to mkdir all: %w", err)
 	}
 	cacheFile, err := os.Create(filePath)
 	if err != nil {
-		return file, xerrors.Errorf("failed to create cache file: %w", err)
+		return file, fmt.Errorf("failed to create cache file: %w", err)
 	}
 
 	tee := io.TeeReader(file, cacheFile)
@@ -41,7 +41,7 @@ func Set(key string, file io.Reader) (io.Reader, error) {
 
 func Clear() error {
 	if err := os.RemoveAll(utils.CacheDir()); err != nil {
-		return xerrors.New("failed to remove cache")
+		return errors.New("failed to remove cache")
 	}
 	return nil
 }
