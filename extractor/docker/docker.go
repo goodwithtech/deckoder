@@ -177,17 +177,17 @@ func (d DockerExtractor) Extract(ctx context.Context, imageName string, filterFu
 	}
 	r, err := d.createRegistryClient(ctx, image.Domain)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create registry: %w", err)
 	}
 
 	// Get the v2 manifest.
 	manifest, err := r.Manifest(ctx, image.Path, image.Reference())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch manifest: %w", err)
 	}
 	m, ok := manifest.(*schema2.DeserializedManifest)
 	if !ok {
-		return nil, errors.New("invalid manifest")
+		return nil, errors.New("failed to match scheme: manifest v2")
 	}
 
 	ch := make(chan layer)
@@ -292,7 +292,7 @@ func (d DockerExtractor) ExtractFromFile(ctx context.Context, r io.Reader, filte
 			layerID := filepath.Base(filepath.Dir(header.Name))
 			files, opqDirs, err := d.ExtractFiles(tr, filterFunc)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to extract files: %w", err)
 			}
 			filesInLayers[layerID] = files
 			opqInLayers[layerID] = opqDirs
@@ -301,12 +301,12 @@ func (d DockerExtractor) ExtractFromFile(ctx context.Context, r io.Reader, filte
 	}
 
 	if len(manifests) == 0 {
-		return nil, errors.New("Invalid image")
+		return nil, errors.New("Invalid image : couldn't find manifest")
 	}
 
 	fileMap, err := applyLayers(manifests[0].Layers, filesInLayers, opqInLayers)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to apply layers: %w", err)
 	}
 
 	// special file for command analyzer
@@ -325,7 +325,7 @@ func (d DockerExtractor) ExtractFiles(layer io.Reader, filterFunc types.FilterFu
 			break
 		}
 		if err != nil {
-			return data, nil, extractor.ErrCouldNotExtract
+			return data, nil, fmt.Errorf("%s: %w", err, extractor.ErrCouldNotExtract)
 		}
 
 		filePath := hdr.Name
