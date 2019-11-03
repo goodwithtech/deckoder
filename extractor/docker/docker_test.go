@@ -74,6 +74,18 @@ func TestExtractFromFile(t *testing.T) {
 			},
 			err: nil,
 		},
+		{
+			file:       "testdata/symbolic.tar",
+			filterFunc: utils.CreateFilterPathFunc([]string{"app/once-suid.txt"}),
+			FileMap: extractor.FileMap{
+				"/config": {
+					Body:     []byte(`{"architecture":"amd64","config":{"Hostname":"","Domainname":"","User":"","AttachStdin":false,"AttachStdout":false,"AttachStderr":false,"Tty":false,"OpenStdin":false,"StdinOnce":false,"Env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],"Cmd":["sh"],"ArgsEscaped":true,"Image":"sha256:25aa26160d606f731f94ccf525b89a4d053dea55283b4c217ab17974470c13d2","Volumes":null,"WorkingDir":"","Entrypoint":null,"OnBuild":null,"Labels":null},"container":"2b8460ecdbc473de1619d5500fcac60b7eeca0644d861f68116d6e800476be2e","container_config":{"Hostname":"","Domainname":"","User":"","AttachStdin":false,"AttachStdout":false,"AttachStderr":false,"Tty":false,"OpenStdin":false,"StdinOnce":false,"Env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],"Cmd":["/bin/sh","-c","chmod u-s /app/once-suid.txt"],"Image":"sha256:25aa26160d606f731f94ccf525b89a4d053dea55283b4c217ab17974470c13d2","Volumes":null,"WorkingDir":"","Entrypoint":null,"OnBuild":null,"Labels":null},"created":"2019-11-03T11:29:05.1794466Z","docker_version":"19.03.3","history":[{"created":"2019-10-30T23:20:37.083008444Z","created_by":"/bin/sh -c #(nop) ADD file:1141b81e5149cc37c4346ee17e282cca8c7016a9bcfeb7a54842a87ecf8419d4 in / "},{"created":"2019-10-30T23:20:37.206592274Z","created_by":"/bin/sh -c #(nop)  CMD [\"sh\"]","empty_layer":true},{"created":"2019-11-03T11:28:31.5777602Z","created_by":"/bin/sh -c #(nop) ADD file:81c0a803075715d1a6b4f75a29f8a01b21cc170cfc1bff6702317d1be2fe71a3 in /app/credentials.json "},{"created":"2019-11-03T11:28:31.7499518Z","created_by":"/bin/sh -c #(nop) COPY file:4c0973905b18418c88918f298422d66c161bc7b268cdd9dea8a5b39f0a2e2724 in /app/suid.txt "},{"created":"2019-11-03T11:28:32.4461907Z","created_by":"/bin/sh -c chmod u+s /app/suid.txt"},{"created":"2019-11-03T11:29:02.9218773Z","created_by":"/bin/sh -c #(nop) COPY file:9db1cd6af9647bf9523a117d9666de3fdd5b712ff196ee9ef831d24b459fe5c5 in /app/gid.txt "},{"created":"2019-11-03T11:29:03.6105192Z","created_by":"/bin/sh -c chmod g+s /app/gid.txt"},{"created":"2019-11-03T11:29:03.8157407Z","created_by":"/bin/sh -c #(nop) COPY file:099532e1e74e65eb216f794cf8322bfb8d79fac9789212976247040be10dd4fd in /app/once-suid.txt "},{"created":"2019-11-03T11:29:04.4828668Z","created_by":"/bin/sh -c chmod u+s /app/once-suid.txt"},{"created":"2019-11-03T11:29:05.1794466Z","created_by":"/bin/sh -c chmod u-s /app/once-suid.txt"}],"os":"linux","rootfs":{"type":"layers","diff_ids":["sha256:1da8e4c8d30765bea127dc2f11a17bc723b59480f4ab5292edb00eb8eb1d96b1","sha256:358229a0697da3d882c843b617236fb6329fb3ed70431a229dd7279c1957ab9b","sha256:677c191235a22a3125057f747c7f44b606e17701b7a273c1d2ff1d8dc825deea","sha256:274c73d4a7f85b7c016d8d7347eda83880f30f8ca06b75845b4f1633cd2ec001","sha256:3664c45b68a51d54ec1616866650d8cad245cb251f1cbd6d379208972c47612c","sha256:6216714b76347932abba59c7b175db61e597637129cc8001cdb7a6dc32c03f0f","sha256:98d172aa39eb52759aa79fda88452c3d78528ea21b170332cf45759c902c519a","sha256:434ba219e3907e89fe29f9b7de597fdf2305c615356f6a760e880570486fb4bb","sha256:98d172aa39eb52759aa79fda88452c3d78528ea21b170332cf45759c902c519a"]}}`),
+					FileMode: os.ModePerm,
+				},
+				"app/once-suid.txt": {Body: []byte(""), FileMode: NormalFileMode},
+			},
+			err: nil,
+		},
 	}
 
 	for _, v := range vectors {

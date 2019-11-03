@@ -265,10 +265,15 @@ func (d DockerExtractor) Extract(ctx context.Context, imageName string, filterFu
 	return fileMap, nil
 }
 
+type layerInfo struct {
+	fileBytes []byte
+	layer     string
+}
+
 func (d DockerExtractor) ExtractFromFile(ctx context.Context, r io.Reader, filterFunc types.FilterFunc) (extractor.FileMap, error) {
 	manifests := make([]manifest, 0)
 	tmpJSONs := extractor.FileMap{}
-	layerMap := make(map[string][]byte)
+	layerMap := make(map[string]layerInfo)
 	tr := tar.NewReader(r)
 	for {
 		header, err := tr.Next()
@@ -294,10 +299,16 @@ func (d DockerExtractor) ExtractFromFile(ctx context.Context, r io.Reader, filte
 		case strings.HasSuffix(header.Name, ".tar"):
 			// save to map, check order to layer ID
 			layerID := filepath.Base(filepath.Dir(header.Name))
-			layerMap[layerID], err = ioutil.ReadAll(tr)
+			if header.Linkname != "" {
+				layerMap[layerID] = layerInfo{layer: filepath.Base(filepath.Dir(header.Linkname))}
+				continue
+			}
+
+			targetBytes, err := ioutil.ReadAll(tr)
 			if err != nil {
 				return nil, err
 			}
+			layerMap[layerID] = layerInfo{fileBytes: targetBytes}
 		default:
 		}
 	}
@@ -311,12 +322,19 @@ func (d DockerExtractor) ExtractFromFile(ctx context.Context, r io.Reader, filte
 	opqInLayers := make(map[string]opqDirs)
 	for _, layerID := range manifests[0].Layers {
 		layerID = trimLayerIdFromFile(layerID)
-		tr, ok := layerMap[layerID]
+		layerContent, ok := layerMap[layerID]
 		if !ok {
 			log.Println("missing layer :", layerID)
 			continue
 		}
-		files, opqDirs, err := d.ExtractFiles(bytes.NewReader(tr), filterFunc)
+
+		var targetByte []byte
+		if layerContent.layer != "" {
+			targetByte = layerMap[layerContent.layer].fileBytes
+		} else {
+			targetByte = layerContent.fileBytes
+		}
+		files, opqDirs, err := d.ExtractFiles(bytes.NewReader(targetByte), filterFunc)
 		if err != nil {
 			return nil, fmt.Errorf("failed to extract files: %w", err)
 		}
