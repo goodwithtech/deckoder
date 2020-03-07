@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/aquasecurity/fanal/types"
 	depTypes "github.com/aquasecurity/go-dep-parser/pkg/types"
+	"github.com/goodwithtech/deckoder/types"
 )
 
 func newTempDB(dbPath string) (string, error) {

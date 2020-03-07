@@ -3,8 +3,8 @@ package image
 import (
 	"context"
 
-	"github.com/aquasecurity/fanal/types"
 	imageTypes "github.com/containers/image/v5/types"
+	"github.com/goodwithtech/deckoder/types"
 )
 
 var (

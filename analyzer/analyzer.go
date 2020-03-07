@@ -9,11 +9,11 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	"golang.org/x/xerrors"
 
-	"github.com/aquasecurity/fanal/cache"
-	"github.com/aquasecurity/fanal/extractor"
-	"github.com/aquasecurity/fanal/extractor/docker"
-	"github.com/aquasecurity/fanal/types"
 	godeptypes "github.com/aquasecurity/go-dep-parser/pkg/types"
+	"github.com/goodwithtech/deckoder/cache"
+	"github.com/goodwithtech/deckoder/extractor"
+	"github.com/goodwithtech/deckoder/extractor/docker"
+	"github.com/goodwithtech/deckoder/types"
 )
 
 var (

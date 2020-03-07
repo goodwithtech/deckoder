@@ -13,9 +13,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/aquasecurity/fanal/extractor"
-	"github.com/aquasecurity/fanal/extractor/image"
-	"github.com/aquasecurity/fanal/types"
+	"github.com/goodwithtech/deckoder/extractor"
+	"github.com/goodwithtech/deckoder/extractor/image"
+	"github.com/goodwithtech/deckoder/types"
 )
 
 func TestApplyLayers(t *testing.T) {

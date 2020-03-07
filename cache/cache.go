@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/aquasecurity/fanal/types"
+	"github.com/goodwithtech/deckoder/types"
 
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/xerrors"

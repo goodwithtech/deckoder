@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/aquasecurity/fanal/types"
 	imageTypes "github.com/containers/image/v5/types"
+	"github.com/goodwithtech/deckoder/types"
 	"github.com/stretchr/testify/assert"
 )
 

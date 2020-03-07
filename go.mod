@@ -1,4 +1,4 @@
-module github.com/aquasecurity/fanal
+module github.com/goodwithtech/deckoder
 
 go 1.13
 

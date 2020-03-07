@@ -10,17 +10,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aquasecurity/fanal/extractor/image/token/ecr"
-	"github.com/aquasecurity/fanal/extractor/image/token/gcr"
 	digest "github.com/opencontainers/go-digest"
 	"golang.org/x/xerrors"
 
-	"github.com/aquasecurity/fanal/analyzer/library"
-	"github.com/aquasecurity/fanal/extractor"
-	"github.com/aquasecurity/fanal/extractor/image"
-	"github.com/aquasecurity/fanal/types"
-	"github.com/aquasecurity/fanal/utils"
+	"github.com/goodwithtech/deckoder/extractor/image/token/ecr"
+	"github.com/goodwithtech/deckoder/extractor/image/token/gcr"
+
 	"github.com/knqyf263/nested"
+
+	"github.com/goodwithtech/deckoder/extractor"
+	"github.com/goodwithtech/deckoder/extractor/image"
+	"github.com/goodwithtech/deckoder/types"
 )
 
 const (
@@ -197,10 +197,6 @@ func (d Extractor) extractFiles(layer io.Reader, filenames []string) (extractor.
 			continue
 		}
 
-		if d.isIgnored(filePath) {
-			continue
-		}
-
 		// Determine if we should extract the element
 		extract := false
 		for _, s := range filenames {
@@ -232,13 +228,4 @@ func (d Extractor) extractFiles(layer io.Reader, filenames []string) (extractor.
 	}
 
 	return data, opqDirs, whFiles, nil
-}
-
-func (d Extractor) isIgnored(filePath string) bool {
-	for _, path := range strings.Split(filePath, utils.PathSeparator) {
-		if utils.StringInSlice(path, library.IgnoreDirs) {
-			return true
-		}
-	}
-	return false
 }
