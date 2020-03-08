@@ -18,7 +18,6 @@ import (
 
 	"github.com/knqyf263/nested"
 
-	"github.com/goodwithtech/deckoder/extractor"
 	"github.com/goodwithtech/deckoder/extractor/image"
 	"github.com/goodwithtech/deckoder/types"
 )
@@ -84,10 +83,9 @@ func newDockerExtractor(ctx context.Context, imgRef image.Reference, transports 
 	}, cleanup, nil
 }
 
-func ApplyLayers(layers []types.LayerInfo) types.ImageDetail {
+func ApplyLayers(layers []types.LayerInfo) types.FileMap {
 	sep := "/"
 	nestedMap := nested.Nested{}
-	var mergedLayer types.ImageDetail
 
 	for _, layer := range layers {
 		for _, opqDir := range layer.OpaqueDirs {
@@ -97,35 +95,26 @@ func ApplyLayers(layers []types.LayerInfo) types.ImageDetail {
 			_ = nestedMap.DeleteByString(whFile, sep)
 		}
 
-		if layer.OS != nil {
-			mergedLayer.OS = layer.OS
+		for filePath, content := range layer.TargetFiles {
+			// fileName := filepath.Base(filePath)
+			// fileDir := filepath.Dir(filePath)
+			nestedMap.SetByString(filePath, sep, content)
 		}
 
-		for _, pkgInfo := range layer.PackageInfos {
-			for i := range pkgInfo.Packages {
-				pkgInfo.Packages[i].LayerID = layer.ID
-			}
-			nestedMap.SetByString(pkgInfo.FilePath, sep, pkgInfo)
-		}
-		for _, app := range layer.Applications {
-			for i := range app.Libraries {
-				app.Libraries[i].LayerID = layer.ID
-			}
-			nestedMap.SetByString(app.FilePath, sep, app)
-		}
 	}
 
+	fileMap := types.FileMap{}
 	_ = nestedMap.Walk(func(keys []string, value interface{}) error {
-		switch v := value.(type) {
-		case types.PackageInfo:
-			mergedLayer.Packages = append(mergedLayer.Packages, v.Packages...)
-		case types.Application:
-			mergedLayer.Applications = append(mergedLayer.Applications, v)
+		content, ok := value.(types.FileData)
+		if !ok {
+			return nil
 		}
+		path := strings.Join(keys, sep)
+		fileMap[path] = content
 		return nil
 	})
 
-	return mergedLayer
+	return fileMap
 }
 
 func (d Extractor) ImageName() string {
@@ -144,11 +133,10 @@ func (d Extractor) LayerIDs() []string {
 	return d.image.LayerIDs()
 }
 
-func (d Extractor) ExtractLayerFiles(ctx context.Context, dig digest.Digest, filenames []string) (
-	digest.Digest, extractor.FileMap, []string, []string, error) {
+func (d Extractor) ExtractLayerFiles(ctx context.Context, dig digest.Digest, filterFunc types.FilterFunc) (types.FileMap, []string, []string, error) {
 	img, err := d.image.GetLayer(ctx, dig)
 	if err != nil {
-		return "", nil, nil, nil, xerrors.Errorf("failed to get a blob: %w", err)
+		return nil, nil, nil, xerrors.Errorf("failed to get a blob: %w", err)
 	}
 	defer img.Close()
 
@@ -156,18 +144,19 @@ func (d Extractor) ExtractLayerFiles(ctx context.Context, dig digest.Digest, fil
 	sha256hash := sha256.New()
 	r := io.TeeReader(img, sha256hash)
 
-	files, opqDirs, whFiles, err := d.extractFiles(r, filenames)
+	files, opqDirs, whFiles, err := d.extractFiles(r, filterFunc)
 	if err != nil {
-		return "", nil, nil, nil, xerrors.Errorf("failed to extract files: %w", err)
+		return nil, nil, nil, xerrors.Errorf("failed to extract files: %w", err)
 	}
 
-	decompressedLayerID := digest.NewDigestFromBytes(digest.SHA256, sha256hash.Sum(nil))
-
-	return decompressedLayerID, files, opqDirs, whFiles, nil
+	return files, opqDirs, whFiles, nil
 }
 
-func (d Extractor) extractFiles(layer io.Reader, filenames []string) (extractor.FileMap, []string, []string, error) {
-	data := make(map[string][]byte)
+// trace another layers if once checked file
+var tracingFilepath = map[string]struct{}{}
+
+func (d Extractor) extractFiles(layer io.Reader, filterFunc types.FilterFunc) (types.FileMap, []string, []string, error) {
+	data := make(map[string]types.FileData)
 	var opqDirs, whFiles []string
 
 	tr := tar.NewReader(layer)
@@ -181,7 +170,10 @@ func (d Extractor) extractFiles(layer io.Reader, filenames []string) (extractor.
 		}
 
 		filePath := hdr.Name
-		filePath = strings.TrimLeft(filepath.Clean(filePath), "/")
+		filePath = filepath.Clean(filePath)
+		fi := hdr.FileInfo()
+		fileMode := fi.Mode()
+
 		fileDir, fileName := filepath.Split(filePath)
 
 		// e.g. etc/.wh..wh..opq
@@ -189,6 +181,13 @@ func (d Extractor) extractFiles(layer io.Reader, filenames []string) (extractor.
 			opqDirs = append(opqDirs, fileDir)
 			continue
 		}
+
+		// Determine if we should extract the element
+		extract := false
+		if _, ok := tracingFilepath[filePath]; ok {
+			extract = true
+		}
+
 		// etc/.wh.hostname
 		if strings.HasPrefix(fileName, wh) {
 			name := strings.TrimPrefix(fileName, wh)
@@ -197,21 +196,16 @@ func (d Extractor) extractFiles(layer io.Reader, filenames []string) (extractor.
 			continue
 		}
 
-		// Determine if we should extract the element
-		extract := false
-		for _, s := range filenames {
-			// extract all files in target directory if last char is "/"(Separator)
-			if s[len(s)-1] == '/' {
-				if filepath.Clean(s) == filepath.Dir(filePath) {
-					extract = true
-					break
-				}
+		if !extract {
+			// Determine if we should extract the element
+			extract, err = filterFunc(hdr)
+			if err != nil {
+				return data, nil, nil, xerrors.Errorf("failed to filtering file: %w", err)
 			}
-
-			if s == filePath || s == fileName {
-				extract = true
-				break
+			if !extract {
+				continue
 			}
+			tracingFilepath[filePath] = struct{}{}
 		}
 
 		if !extract {
@@ -223,7 +217,10 @@ func (d Extractor) extractFiles(layer io.Reader, filenames []string) (extractor.
 			if err != nil {
 				return nil, nil, nil, xerrors.Errorf("failed to read file: %w", err)
 			}
-			data[filePath] = d
+			data[filePath] = types.FileData{
+				Body:     d,
+				FileMode: fileMode,
+			}
 		}
 	}
 

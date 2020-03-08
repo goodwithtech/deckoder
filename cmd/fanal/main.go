@@ -5,18 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
 	"time"
-
-	"github.com/goodwithtech/deckoder/cache"
-	"github.com/goodwithtech/deckoder/utils"
-	"golang.org/x/xerrors"
 
 	"github.com/goodwithtech/deckoder/analyzer"
 	"github.com/goodwithtech/deckoder/extractor"
 	"github.com/goodwithtech/deckoder/extractor/docker"
 	"github.com/goodwithtech/deckoder/types"
-	"golang.org/x/crypto/ssh/terminal"
+	"github.com/goodwithtech/deckoder/utils"
 )
 
 func main() {
@@ -28,20 +23,7 @@ func main() {
 func run() (err error) {
 	ctx := context.Background()
 	tarPath := flag.String("f", "-", "layer.tar path")
-	clearCache := flag.Bool("clear", false, "clear cache")
 	flag.Parse()
-
-	c, err := cache.NewFSCache(utils.CacheDir())
-	if err != nil {
-		return err
-	}
-
-	if *clearCache {
-		if err = c.Clear(); err != nil {
-			return xerrors.Errorf("%w", err)
-		}
-		return nil
-	}
 
 	args := flag.Args()
 
@@ -65,34 +47,15 @@ func run() (err error) {
 	}
 	defer cleanup()
 
-	ac := analyzer.New(ext, c)
-	imageInfo, err := ac.Analyze(ctx)
+	filter := utils.CreateFilterPathFunc([]string{"etc/shadow"})
+	ac := analyzer.New(ext)
+	fileMap, err := ac.Analyze(ctx, filter)
 	if err != nil {
 		return err
 	}
 
-	a := analyzer.NewApplier(c)
-	mergedLayer, err := a.ApplyLayers(imageInfo.ID, imageInfo.LayerIDs)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("%+v\n", mergedLayer.OS)
-	fmt.Printf("via image Packages: %d\n", len(mergedLayer.Packages))
-	for _, app := range mergedLayer.Applications {
-		fmt.Printf("%s (%s): %d\n", app.Type, app.FilePath, len(app.Libraries))
+	for name, f := range fileMap {
+		fmt.Println(name, string(f.Body))
 	}
 	return nil
-}
-
-func openStream(path string) (*os.File, error) {
-	if path == "-" {
-		if terminal.IsTerminal(0) {
-			flag.Usage()
-			os.Exit(64)
-		} else {
-			return os.Stdin, nil
-		}
-	}
-	return os.Open(path)
 }

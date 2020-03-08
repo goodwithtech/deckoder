@@ -4,14 +4,14 @@ import (
 	"context"
 
 	digest "github.com/opencontainers/go-digest"
-)
 
-type FileMap map[string][]byte
+	"github.com/goodwithtech/deckoder/types"
+)
 
 type Extractor interface {
 	ImageName() (imageName string)
 	ImageID() (imageID digest.Digest)
 	ConfigBlob(ctx context.Context) (configBlob []byte, err error)
 	LayerIDs() (layerIDs []string)
-	ExtractLayerFiles(ctx context.Context, dig digest.Digest, filenames []string) (decompressedLayerId digest.Digest, files FileMap, opqDirs []string, whFiles []string, err error)
+	ExtractLayerFiles(ctx context.Context, dig digest.Digest, filterFunc types.FilterFunc) (files types.FileMap, opqDirs, whFiles []string, err error)
 }

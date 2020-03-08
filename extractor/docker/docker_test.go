@@ -2,10 +2,8 @@ package docker
 
 import (
 	"context"
-	"sort"
+	"os"
 	"testing"
-
-	godeptypes "github.com/aquasecurity/go-dep-parser/pkg/types"
 
 	"github.com/stretchr/testify/assert"
 
@@ -13,211 +11,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/goodwithtech/deckoder/extractor"
 	"github.com/goodwithtech/deckoder/extractor/image"
 	"github.com/goodwithtech/deckoder/types"
+	"github.com/goodwithtech/deckoder/utils"
 )
 
-func TestApplyLayers(t *testing.T) {
-	testCases := []struct {
-		name                string
-		inputLayers         []types.LayerInfo
-		expectedImageDetail types.ImageDetail
-	}{
-		{
-			name: "happy path",
-			inputLayers: []types.LayerInfo{
-				{
-					SchemaVersion: 1,
-					ID:            "sha256:932da51564135c98a49a34a193d6cd363d8fa4184d957fde16c9d8527b3f3b02",
-					OS: &types.OS{
-						Family: "alpine",
-						Name:   "3.10",
-					},
-					PackageInfos: []types.PackageInfo{
-						{
-							FilePath: "lib/apk/db/installed",
-							Packages: []types.Package{
-								{
-									Name:    "openssl",
-									Version: "1.2.3",
-									Release: "4.5.6",
-								},
-							},
-						},
-					},
-					Applications: []types.Application{
-						{
-							Type:     "gem",
-							FilePath: "app/Gemfile.lock",
-							Libraries: []types.LibraryInfo{
-								{
-									Library: godeptypes.Library{
-										Name:    "gemlibrary1",
-										Version: "1.2.3",
-									},
-								},
-							},
-						},
-						{
-							Type:     "composer",
-							FilePath: "app/composer.lock",
-							Libraries: []types.LibraryInfo{
-								{
-									Library: godeptypes.Library{
-										Name:    "phplibrary1",
-										Version: "6.6.6",
-									},
-								},
-							},
-						},
-					},
-				},
-				{
-					SchemaVersion: 1,
-					ID:            "sha256:24df0d4e20c0f42d3703bf1f1db2bdd77346c7956f74f423603d651e8e5ae8a7",
-					PackageInfos: []types.PackageInfo{
-						{
-							FilePath: "lib/apk/db/installed",
-							Packages: []types.Package{
-								{
-									Name:    "openssl",
-									Version: "1.2.3",
-									Release: "4.5.6",
-								},
-								{
-									Name:    "musl",
-									Version: "1.2.4",
-									Release: "4.5.7",
-								},
-							},
-						},
-					},
-					WhiteoutFiles: []string{"app/composer.lock"},
-				},
-			},
-			expectedImageDetail: types.ImageDetail{
-				OS: &types.OS{
-					Family: "alpine",
-					Name:   "3.10",
-				},
-				Packages: []types.Package{
-					{
-						Name:    "musl",
-						Version: "1.2.4",
-						Release: "4.5.7",
-						LayerID: "sha256:24df0d4e20c0f42d3703bf1f1db2bdd77346c7956f74f423603d651e8e5ae8a7",
-					},
-					{
-						Name:    "openssl",
-						Version: "1.2.3",
-						Release: "4.5.6",
-						LayerID: "sha256:24df0d4e20c0f42d3703bf1f1db2bdd77346c7956f74f423603d651e8e5ae8a7",
-					},
-				},
-				Applications: []types.Application{
-					{
-						Type:     "gem",
-						FilePath: "app/Gemfile.lock",
-						Libraries: []types.LibraryInfo{
-							{
-								Library: godeptypes.Library{
-									Name:    "gemlibrary1",
-									Version: "1.2.3",
-								},
-								LayerID: "sha256:932da51564135c98a49a34a193d6cd363d8fa4184d957fde16c9d8527b3f3b02",
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "happy path with status.d",
-			inputLayers: []types.LayerInfo{
-				{
-					SchemaVersion: 1,
-					ID:            "sha256:24df0d4e20c0f42d3703bf1f1db2bdd77346c7956f74f423603d651e8e5ae8a7",
-					OS: &types.OS{
-						Family: "debian",
-						Name:   "8",
-					},
-					PackageInfos: []types.PackageInfo{
-						{
-							FilePath: "var/lib/dpkg/status.d/openssl",
-							Packages: []types.Package{
-								{
-									Name:    "openssl",
-									Version: "1.2.3",
-									Release: "4.5.6",
-								},
-							},
-						},
-					},
-					Applications: []types.Application{
-						{
-							Type:     "composer",
-							FilePath: "app/composer.lock",
-							Libraries: []types.LibraryInfo{
-								{
-									Library: godeptypes.Library{
-										Name:    "phplibrary1",
-										Version: "6.6.6",
-									},
-								},
-							},
-						},
-					},
-				},
-				{
-					SchemaVersion: 1,
-					ID:            "sha256:932da51564135c98a49a34a193d6cd363d8fa4184d957fde16c9d8527b3f3b02",
-					PackageInfos: []types.PackageInfo{
-						{
-							FilePath: "var/lib/dpkg/status.d/libc",
-							Packages: []types.Package{
-								{
-									Name:    "libc",
-									Version: "1.2.4",
-									Release: "4.5.7",
-								},
-							},
-						},
-					},
-					OpaqueDirs: []string{"app"},
-				},
-			},
-			expectedImageDetail: types.ImageDetail{
-				OS: &types.OS{
-					Family: "debian",
-					Name:   "8",
-				},
-				Packages: []types.Package{
-					{
-						LayerID: "sha256:932da51564135c98a49a34a193d6cd363d8fa4184d957fde16c9d8527b3f3b02",
-						Name:    "libc",
-						Version: "1.2.4",
-						Release: "4.5.7",
-					},
-					{
-						LayerID: "sha256:24df0d4e20c0f42d3703bf1f1db2bdd77346c7956f74f423603d651e8e5ae8a7",
-						Name:    "openssl",
-						Version: "1.2.3",
-						Release: "4.5.6",
-					},
-				},
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		gotImageDetail := ApplyLayers(tc.inputLayers)
-		sort.Slice(gotImageDetail.Packages, func(i, j int) bool {
-			return gotImageDetail.Packages[i].Name < gotImageDetail.Packages[j].Name
-		})
-		assert.Equal(t, tc.expectedImageDetail, gotImageDetail, tc.name)
-	}
-}
+const (
+	NormalFileMode os.FileMode = 0644
+	SuFileMode     os.FileMode = 0600
+	SetSuidNormal  os.FileMode = 040000644
+)
 
 func TestExtractor_ExtractLayerFiles(t *testing.T) {
 	type fields struct {
@@ -225,9 +28,9 @@ func TestExtractor_ExtractLayerFiles(t *testing.T) {
 		image  image.RealImage
 	}
 	type args struct {
-		ctx       context.Context
-		dig       digest.Digest
-		filenames []string
+		ctx    context.Context
+		dig    digest.Digest
+		filter types.FilterFunc
 	}
 	tests := []struct {
 		name            string
@@ -235,7 +38,7 @@ func TestExtractor_ExtractLayerFiles(t *testing.T) {
 		args            args
 		imagePath       string
 		expectedDigest  digest.Digest
-		expectedFileMap extractor.FileMap
+		expectedFileMap types.FileMap
 		expectedOpqDirs []string
 		expectedWhFiles []string
 		wantErr         string
@@ -244,43 +47,43 @@ func TestExtractor_ExtractLayerFiles(t *testing.T) {
 			name:      "happy path",
 			imagePath: "testdata/image1.tar",
 			args: args{
-				ctx:       nil,
-				dig:       "sha256:d9ff549177a94a413c425ffe14ae1cc0aa254bc9c7df781add08e7d2fba25d27",
-				filenames: []string{"etc/hostname"},
+				ctx:    nil,
+				dig:    "sha256:d9ff549177a94a413c425ffe14ae1cc0aa254bc9c7df781add08e7d2fba25d27",
+				filter: utils.CreateFilterPathFunc([]string{"etc/hostname"}),
 			},
 			expectedDigest: "sha256:d9ff549177a94a413c425ffe14ae1cc0aa254bc9c7df781add08e7d2fba25d27",
-			expectedFileMap: extractor.FileMap{
-				"etc/hostname": []byte("localhost\n"),
+			expectedFileMap: types.FileMap{
+				"etc/hostname": types.FileData{
+					Body:     []byte("localhost\n"),
+					FileMode: NormalFileMode,
+				},
 			},
 		},
 		{
-			name:      "opq file path",
-			imagePath: "testdata/image1.tar",
+			name:      "symbolic path",
+			imagePath: "testdata/symbolic.tar",
 			args: args{
-				ctx:       nil,
-				dig:       "sha256:a8b87ccf2f2f94b9e23308560800afa3f272aa6db5cc7d9b0119b6843889cff2",
-				filenames: []string{"etc/test/"},
+				ctx:    nil,
+				dig:    "sha256:98d172aa39eb52759aa79fda88452c3d78528ea21b170332cf45759c902c519a",
+				filter: utils.CreateFilterPathFunc([]string{"app/once-suid.txt"}),
 			},
-			expectedDigest: "sha256:a8b87ccf2f2f94b9e23308560800afa3f272aa6db5cc7d9b0119b6843889cff2",
-			expectedFileMap: extractor.FileMap{
-				"etc/test/bar": []byte("bar\n"),
+			expectedDigest: "sha256:677c191235a22a3125057f747c7f44b606e17701b7a273c1d2ff1d8dc825deea",
+			expectedFileMap: types.FileMap{
+				"app/once-suid.txt": {Body: []byte(""), FileMode: NormalFileMode},
 			},
-			expectedOpqDirs: []string{"etc/test/"},
-			expectedWhFiles: []string{"var/foo"},
 		},
 		{
-			name:      "sad path with GetLayer fails",
-			imagePath: "testdata/image1.tar",
+			name:      "symbolic path",
+			imagePath: "testdata/symbolic.tar",
 			args: args{
-				ctx:       nil,
-				dig:       "sha256:unknown",
-				filenames: []string{"var/foo"},
+				ctx:    nil,
+				dig:    "sha256:434ba219e3907e89fe29f9b7de597fdf2305c615356f6a760e880570486fb4bb",
+				filter: utils.CreateFilterPathFunc([]string{"app/once-suid.txt"}),
 			},
-			expectedDigest: "sha256:f75441026d68038ca80e92f342fb8f3c0f1faeec67b5a80c98f033a65beaef5a",
-			expectedFileMap: extractor.FileMap{
-				"var/foo": []byte(""),
+			expectedDigest: "sha256:677c191235a22a3125057f747c7f44b606e17701b7a273c1d2ff1d8dc825deea",
+			expectedFileMap: types.FileMap{
+				"app/once-suid.txt": {Body: []byte(""), FileMode: SetSuidNormal},
 			},
-			wantErr: "Unknown blob",
 		},
 	}
 	for _, tt := range tests {
@@ -289,7 +92,7 @@ func TestExtractor_ExtractLayerFiles(t *testing.T) {
 			require.NoError(t, err)
 			defer cleanup()
 
-			actualDigest, actualFileMap, actualOpqDirs, actualWhFiles, err := d.ExtractLayerFiles(tt.args.ctx, tt.args.dig, tt.args.filenames)
+			actualFileMap, actualOpqDirs, actualWhFiles, err := d.ExtractLayerFiles(tt.args.ctx, tt.args.dig, tt.args.filter)
 			if tt.wantErr != "" {
 				require.NotNil(t, err, tt.name)
 				assert.Contains(t, err.Error(), tt.wantErr, tt.name)
@@ -298,7 +101,6 @@ func TestExtractor_ExtractLayerFiles(t *testing.T) {
 				require.NoError(t, err, tt.name)
 			}
 
-			assert.Equal(t, tt.expectedDigest, actualDigest)
 			assert.Equal(t, tt.expectedFileMap, actualFileMap)
 			assert.Equal(t, tt.expectedOpqDirs, actualOpqDirs)
 			assert.Equal(t, tt.expectedWhFiles, actualWhFiles)

@@ -1,10 +1,14 @@
 package utils
 
 import (
+	"archive/tar"
 	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+
+	"github.com/goodwithtech/deckoder/types"
 )
 
 var (
@@ -42,4 +46,13 @@ func IsGzip(f *bufio.Reader) bool {
 		return false
 	}
 	return buf[0] == 0x1F && buf[1] == 0x8B && buf[2] == 0x8
+}
+
+// CreateFilterPathFunc :
+func CreateFilterPathFunc(filenames []string) types.FilterFunc {
+	return func(h *tar.Header) (bool, error) {
+		filePath := filepath.Clean(h.Name)
+		fileName := filepath.Base(filePath)
+		return StringInSlice(filePath, filenames) || StringInSlice(fileName, filenames), nil
+	}
 }
