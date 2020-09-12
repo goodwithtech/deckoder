@@ -14,7 +14,7 @@ func CacheDir() string {
 	if err != nil {
 		cacheDir = os.TempDir()
 	}
-	dir := filepath.Join(cacheDir, "fanal")
+	dir := filepath.Join(cacheDir, "deckoder")
 	return dir
 }
 
