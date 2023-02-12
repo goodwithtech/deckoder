@@ -137,7 +137,7 @@ func TestNewImage(t *testing.T) {
 					InsecureSkipTLSVerify: true,
 				},
 			},
-			wantErr: `unexpected end of JSON input`,
+			wantErr: `failed to initialize source`,
 		},
 		{
 			name: "sad path: invalid manifest JSON",
