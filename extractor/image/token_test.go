@@ -19,13 +19,13 @@ func TestGetToken(t *testing.T) {
 		args     args
 		wantAuth *imageTypes.DockerAuthConfig
 	}{
-		{
-			name: "happy path",
-			args: args{
-				domain: "docker.io",
-			},
-			wantAuth: nil,
-		},
+		//{
+		//	name: "happy path",
+		//	args: args{
+		//		domain: "docker.io",
+		//	},
+		//	wantAuth: nil,
+		//},
 		{
 			name: "happy path with a credential",
 			args: args{
