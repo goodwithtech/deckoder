@@ -6,7 +6,7 @@ require (
 	github.com/GoogleCloudPlatform/docker-credential-gcr v2.0.5+incompatible
 	github.com/aws/aws-sdk-go v1.44.122
 	github.com/containers/image/v5 v5.24.1
-	github.com/docker/distribution v2.8.1+incompatible
+	github.com/docker/distribution v2.8.2+incompatible
 	github.com/knqyf263/nested v0.0.1
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/stretchr/testify v1.8.1
