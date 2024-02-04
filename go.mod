@@ -1,6 +1,6 @@
 module github.com/goodwithtech/deckoder
 
-go 1.20
+go 1.21
 
 require (
 	github.com/GoogleCloudPlatform/docker-credential-gcr v2.0.5+incompatible
