@@ -12,9 +12,9 @@ jobs:
     - uses: actions/checkout@master
       with:
         fetch-depth: 0
-    - uses: actions/setup-go@v2
+    - uses: actions/setup-go@v5
       with:
-        go-version: '1.19'
+      go-version: '>=1.22.0'
     - name: Install dependencies
       run: sudo apt-get install libdb-dev libbtrfs-dev pkg-config libdevmapper-dev
     - name: Run unit tests
