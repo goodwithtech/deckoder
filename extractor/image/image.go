@@ -9,7 +9,7 @@ import (
 	"github.com/containers/image/v5/pkg/compression"
 	"github.com/containers/image/v5/transports/alltransports"
 	imageTypes "github.com/containers/image/v5/types"
-	"github.com/docker/distribution/reference"
+	"github.com/distribution/reference"
 	digest "github.com/opencontainers/go-digest"
 	"golang.org/x/xerrors"
 
