@@ -8,9 +8,9 @@ import (
 
 	"golang.org/x/xerrors"
 
-	"github.com/GoogleCloudPlatform/docker-credential-gcr/config"
-	"github.com/GoogleCloudPlatform/docker-credential-gcr/credhelper"
-	"github.com/GoogleCloudPlatform/docker-credential-gcr/store"
+	"github.com/GoogleCloudPlatform/docker-credential-gcr/v2/config"
+	"github.com/GoogleCloudPlatform/docker-credential-gcr/v2/credhelper"
+	"github.com/GoogleCloudPlatform/docker-credential-gcr/v2/store"
 )
 
 type GCR struct {
