@@ -2,6 +2,7 @@ package image
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 
 	"github.com/containers/image/v5/image"
@@ -18,6 +19,7 @@ import (
 
 type ImageSource interface {
 	GetBlob(ctx context.Context, info imageTypes.BlobInfo, cache imageTypes.BlobInfoCache) (reader io.ReadCloser, n int64, err error)
+	GetManifest(ctx context.Context, instanceDigest *digest.Digest) ([]byte, string, error)
 	Close() error
 }
 
@@ -145,7 +147,24 @@ func (img RealImage) ConfigBlob(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	size, err := img.GetImageSize(ctx)
+	if err != nil {
+		return nil, err
+	}
+	b, err = addSizeToConfig(b, size)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to add size to blob data: %w", err)
+	}
 	return b, nil
+}
+
+func addSizeToConfig(configBlob []byte, imageSize int64) ([]byte, error) {
+	var config map[string]interface{}
+	if err := json.Unmarshal(configBlob, &config); err != nil {
+		return nil, err
+	}
+	config["size"] = imageSize
+	return json.Marshal(config)
 }
 
 func (img RealImage) GetLayer(ctx context.Context, dig digest.Digest) (io.ReadCloser, error) {
@@ -160,6 +179,49 @@ func (img RealImage) GetLayer(ctx context.Context, dig digest.Digest) (io.ReadCl
 	}
 
 	return stream, nil
+}
+
+func (img RealImage) GetImageSize(ctx context.Context) (int64, error) {
+	manifestBytes, _, err := img.rawSource.GetManifest(ctx, nil)
+	if err != nil {
+		return -1, xerrors.Errorf("failed to download manifest: %w", err)
+	}
+
+	var manifestV2 struct {
+		Config struct {
+			Size int64 `json:"size"`
+		} `json:"config"`
+		Layers []struct {
+			Size int64 `json:"size"`
+		} `json:"layers"`
+	}
+
+	if err := json.Unmarshal(manifestBytes, &manifestV2); err == nil {
+		return calculateTotalSizeFromLayers(manifestV2.Config.Size, manifestV2.Layers), nil
+	}
+
+	var manifestOCI struct {
+		Config struct {
+			Size int64 `json:"size"`
+		} `json:"config"`
+		Layers []struct {
+			Size int64 `json:"size"`
+		} `json:"layers"`
+	}
+
+	if err := json.Unmarshal(manifestBytes, &manifestOCI); err == nil {
+		return calculateTotalSizeFromLayers(manifestOCI.Config.Size, manifestOCI.Layers), nil
+	}
+
+	return -1, xerrors.Errorf("unable to parse manifest data: %w", err)
+}
+
+func calculateTotalSizeFromLayers(configSize int64, layers []struct{ Size int64 `json:"size"` }) int64 {
+	var total int64 = configSize
+	for _, layer := range layers {
+		total += layer.Size
+	}
+	return total
 }
 
 func (img RealImage) Close() error {
